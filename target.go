@@ -1,10 +1,11 @@
 package spider
 
 import (
-	"github.com/474420502/focus/compare"
-	pqueue "github.com/474420502/focus/priority_queue"
-	"github.com/474420502/requests"
 	"sync/atomic"
+
+	"github.com/474420502/focus/compare"
+	heap "github.com/474420502/focus/tree/heap"
+	"github.com/474420502/requests"
 )
 
 // SettingTarget 一些判断操作
@@ -15,11 +16,20 @@ type SettingTarget struct {
 
 // Target 目标
 type Target struct {
-	url             string
-	session         *requests.Session
-	tasks           *pqueue.PriorityQueue
+	url     string
+	session *requests.Session
+	share   map[string]interface{}
+
+	tasks         *heap.Tree
+	preparedTasks *heap.Tree
+
 	priorityCompare compare.Compare
 	Is              *SettingTarget
+}
+
+// GetShare Get return share interface{}
+func (target *Target) GetShare() map[string]interface{} {
+	return target.share
 }
 
 // GetPriorityCompare Get return priorityCompare compare.Compare
@@ -29,16 +39,16 @@ type Target struct {
 
 // SetPriorityCompare Set priorityCompare compare.Compare 自定义优先
 func (target *Target) SetPriorityCompare(compare compare.Compare) {
-	queue := pqueue.New(compare)
+	queue := heap.New(compare)
 
 	if atomic.LoadInt32(&target.Is.isRunning) > 0 {
 		panic("SetPriorityCompare,  App can not be Running.")
 	}
 
-	iter := target.tasks.Iterator()
-	for iter.Next() {
-		queue.Push(iter.Value())
+	for _, v := range target.tasks.Values() {
+		queue.Put(v)
 	}
+
 	target.tasks = queue
 	target.priorityCompare = compare
 }
@@ -65,12 +75,7 @@ func (target *Target) SetURL(url string) {
 
 // AddTask 添加任务
 func (target *Target) AddTask(task ITask) {
-	target.tasks.Push(task)
-}
-
-// ChangePriority 添加任务
-func (target *Target) ChangePriority(task ITask, priority int) {
-	target.tasks.Push(task)
+	target.tasks.Put(task)
 }
 
 func (target *Target) processingContext(ctx *Context) {
@@ -80,25 +85,31 @@ func (target *Target) processingContext(ctx *Context) {
 // StartTask 添加任务
 func (target *Target) StartTask() {
 
-	iter := target.tasks.Iterator()
+	target.preparedTasks = heap.New(target.priorityCompare)
+
 	atomic.StoreInt32(&target.Is.isRunning, 1)
 
-	ctx := &Context{target: target}
+	ctx := &Context{target: target, share: target.share}
 	ctx.SetRetry(0)
+	ctx.SetIndex(0)
 
 	for atomic.LoadInt32(&target.Is.isRunning) > 0 {
-		if iter.Next() {
+		if itask, ok := target.tasks.Pop(); ok {
 
-			task := iter.Value().(ITask)
+			task := itask.(ITask)
 			task.Execute(ctx)
+
+			target.preparedTasks.Put(itask)
+			ctx.SetIndex(ctx.GetIndex() + 1)
 
 		} else if target.Is.isTaskOnce {
 			break
 		} else {
-			iter.ToHead()
+			target.tasks, target.preparedTasks = target.preparedTasks, target.tasks
+			ctx.SetIndex(0)
 		}
 	}
-	atomic.StoreInt32(&target.Is.isRunning, 1)
+	atomic.StoreInt32(&target.Is.isRunning, 0)
 }
 
 // StopTask 停止任务
@@ -109,6 +120,7 @@ func (target *Target) StopTask() {
 // NewTarget 目标
 func NewTarget() *Target {
 	target := new(Target)
-	target.tasks = pqueue.New(PriorityMax)
+	target.tasks = heap.New(PriorityMax)
+	target.share = make(map[string]interface{})
 	return target
 }

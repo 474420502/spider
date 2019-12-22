@@ -10,8 +10,11 @@ type MyTask1 struct {
 // Execute
 func (mt *MyTask1) Execute(ctx *Context) {
 	target := ctx.GetTarget()
+
 	ses := target.GetSession()
 	ses.Get(target.url)
+
+	mt.PriorityInt = 5
 }
 
 func TestTargetCase1(t *testing.T) {

@@ -1,11 +1,28 @@
 package spider
 
+// SettingContext 一些判断操作
+type SettingContext struct {
+	IsRestart int32
+}
+
 // Context Context of Task
 type Context struct {
 	target *Target
-	share  interface{}
+	share  map[string]interface{}
+	index  int
+	retry  int
 
-	retry int
+	Is *SettingContext
+}
+
+// GetIndex Get return index int
+func (ctx *Context) GetIndex() int {
+	return ctx.index
+}
+
+// SetIndex Set index int
+func (ctx *Context) SetIndex(index int) {
+	ctx.index = index
 }
 
 // GetRetry Get return retry int
@@ -19,13 +36,8 @@ func (ctx *Context) SetRetry(retry int) {
 }
 
 // GetShare Get return share interface{}
-func (ctx *Context) GetShare() interface{} {
+func (ctx *Context) GetShare() map[string]interface{} {
 	return ctx.share
-}
-
-// SetShare Set share interface{}
-func (ctx *Context) SetShare(share interface{}) {
-	ctx.share = share
 }
 
 // GetTarget Get return target *Target
