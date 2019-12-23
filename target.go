@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 
 	"github.com/474420502/focus/compare"
-	heap "github.com/474420502/focus/tree/heap"
+	pqueue "github.com/474420502/focus/priority_queue"
 	"github.com/474420502/requests"
 )
 
@@ -14,15 +14,29 @@ type SettingTarget struct {
 	isTaskOnce bool
 }
 
+// NewTarget 目标
+func NewTarget() *Target {
+	target := new(Target)
+
+	target.tasks = pqueue.New(PriorityMax)
+	target.preparedTasks = pqueue.New(PriorityMax)
+	target.subTasks = pqueue.New(subPriorityMax)
+
+	target.share = make(map[string]interface{})
+	target.Is = &SettingTarget{isRunning: 0, isTaskOnce: false}
+
+	return target
+}
+
 // Target 目标
 type Target struct {
 	url     string
 	session *requests.Session
 	share   map[string]interface{}
 
-	tasks         *heap.Tree
-	preparedTasks *heap.Tree
-	subTasks      *heap.Tree
+	tasks         *pqueue.PriorityQueue
+	preparedTasks *pqueue.PriorityQueue
+	subTasks      *pqueue.PriorityQueue
 
 	priorityCompare compare.Compare
 	Is              *SettingTarget
@@ -38,24 +52,43 @@ func (target *Target) GetShare() map[string]interface{} {
 // 	return target.priorityCompare
 // }
 
+// GetTaskOnce Get isTaskOnce
+func (target *Target) GetTaskOnce() bool {
+	return target.Is.isTaskOnce
+}
+
+// SetTaskOnce Set isTaskOnce
+func (target *Target) SetTaskOnce(is bool) {
+	target.Is.isTaskOnce = is
+}
+
 // SetPriorityCompare Set priorityCompare compare.Compare 自定义优先
 func (target *Target) SetPriorityCompare(compare compare.Compare) {
-	queue := heap.New(compare)
+	tasks := pqueue.New(compare)
+	preparedTasks := pqueue.New(compare)
 
 	if atomic.LoadInt32(&target.Is.isRunning) > 0 {
 		panic("SetPriorityCompare,  App can not be Running.")
 	}
 
 	for _, v := range target.tasks.Values() {
-		queue.Put(v)
+		tasks.Push(v)
 	}
 
-	target.tasks = queue
+	for _, v := range target.preparedTasks.Values() {
+		preparedTasks.Push(v)
+	}
+
+	target.tasks = tasks
+	target.preparedTasks = preparedTasks
 	target.priorityCompare = compare
 }
 
 // GetSession Get return session *requests.Session
 func (target *Target) GetSession() *requests.Session {
+	if target.session == nil {
+		target.session = requests.NewSession()
+	}
 	return target.session
 }
 
@@ -76,12 +109,12 @@ func (target *Target) SetURL(url string) {
 
 // AddTask 添加任务
 func (target *Target) AddTask(task ITask) {
-	target.tasks.Put(task)
+	target.tasks.Push(task)
 }
 
 // AppendTask 添加任务
 func (target *Target) AppendTask(task ITask) {
-	target.tasks.Put(task)
+	target.tasks.Push(task)
 }
 
 func (target *Target) processingContext(ctx *Context) {
@@ -91,23 +124,20 @@ func (target *Target) processingContext(ctx *Context) {
 // StartTask 添加任务
 func (target *Target) StartTask() {
 
-	target.preparedTasks = heap.New(target.priorityCompare)
-
 	atomic.StoreInt32(&target.Is.isRunning, 1)
 
 	ctx := &Context{target: target, share: target.share}
 	ctx.SetRetry(0)
-	ctx.SetIndex(0)
 
 	for atomic.LoadInt32(&target.Is.isRunning) > 0 {
+
 		if itask, ok := target.tasks.Pop(); ok {
 
 			task := itask.(ITask)
 			task.Execute(ctx)
 
-			target.preparedTasks.Put(itask)
-
-			for !target.subTasks.Empty() {
+			target.preparedTasks.Push(itask)
+			for target.subTasks.Size() != 0 {
 
 				if isub, ok := target.subTasks.Pop(); ok {
 					switch sub := isub.(type) {
@@ -120,30 +150,23 @@ func (target *Target) StartTask() {
 
 			}
 
-			ctx.SetIndex(ctx.GetIndex() + 1)
-
 		} else if target.Is.isTaskOnce {
 			break
 		} else {
 			target.tasks, target.preparedTasks = target.preparedTasks, target.tasks
-			ctx.SetIndex(0)
 		}
+
 	}
+
+	for itask, ok := target.tasks.Pop(); ok; itask, ok = target.tasks.Pop() {
+		target.preparedTasks.Push(itask)
+	}
+	target.tasks, target.preparedTasks = target.preparedTasks, target.tasks
+
 	atomic.StoreInt32(&target.Is.isRunning, 0)
 }
 
 // StopTask 停止任务
 func (target *Target) StopTask() {
 	atomic.StoreInt32(&target.Is.isRunning, 0)
-}
-
-// NewTarget 目标
-func NewTarget() *Target {
-	target := new(Target)
-
-	target.tasks = heap.New(PriorityMax)
-	target.subTasks = heap.New(subPriorityMax)
-
-	target.share = make(map[string]interface{})
-	return target
 }

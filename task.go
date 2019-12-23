@@ -22,20 +22,9 @@ type Context struct {
 	target *Target
 
 	share map[string]interface{}
-	index int
 	retry int
 
 	Is *SettingContext
-}
-
-// GetIndex Get return index int
-func (ctx *Context) GetIndex() int {
-	return ctx.index
-}
-
-// SetIndex Set index int
-func (ctx *Context) SetIndex(index int) {
-	ctx.index = index
 }
 
 // GetRetry Get return retry int
