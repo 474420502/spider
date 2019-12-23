@@ -1,16 +1,29 @@
 package spider
 
+// IExecute The Interface Of Spider Execute
+type IExecute interface {
+	Execute(*Context)
+}
+
+// ITask The Interface Of Task
+type ITask interface {
+	IPriority
+	IExecute
+}
+
 // SettingContext 一些判断操作
 type SettingContext struct {
 	IsRestart int32
+	IsSubTask bool
 }
 
 // Context Context of Task
 type Context struct {
 	target *Target
-	share  map[string]interface{}
-	index  int
-	retry  int
+
+	share map[string]interface{}
+	index int
+	retry int
 
 	Is *SettingContext
 }
@@ -43,10 +56,4 @@ func (ctx *Context) GetShare() map[string]interface{} {
 // GetTarget Get return target *Target
 func (ctx *Context) GetTarget() *Target {
 	return ctx.target
-}
-
-// ITask the interface of task
-type ITask interface {
-	Execute(*Context)
-	GetPriority() int
 }

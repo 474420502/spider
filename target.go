@@ -22,6 +22,7 @@ type Target struct {
 
 	tasks         *heap.Tree
 	preparedTasks *heap.Tree
+	subTasks      *heap.Tree
 
 	priorityCompare compare.Compare
 	Is              *SettingTarget
@@ -78,6 +79,11 @@ func (target *Target) AddTask(task ITask) {
 	target.tasks.Put(task)
 }
 
+// AppendTask 添加任务
+func (target *Target) AppendTask(task ITask) {
+	target.tasks.Put(task)
+}
+
 func (target *Target) processingContext(ctx *Context) {
 
 }
@@ -100,6 +106,20 @@ func (target *Target) StartTask() {
 			task.Execute(ctx)
 
 			target.preparedTasks.Put(itask)
+
+			for !target.subTasks.Empty() {
+
+				if isub, ok := target.subTasks.Pop(); ok {
+					switch sub := isub.(type) {
+					case func(*Context):
+						sub(ctx)
+					case IExecute:
+						sub.Execute(ctx)
+					}
+				}
+
+			}
+
 			ctx.SetIndex(ctx.GetIndex() + 1)
 
 		} else if target.Is.isTaskOnce {
@@ -120,7 +140,10 @@ func (target *Target) StopTask() {
 // NewTarget 目标
 func NewTarget() *Target {
 	target := new(Target)
+
 	target.tasks = heap.New(PriorityMax)
+	target.subTasks = heap.New(subPriorityMax)
+
 	target.share = make(map[string]interface{})
 	return target
 }

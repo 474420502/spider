@@ -1,10 +1,12 @@
 package spider
 
-import "testing"
+import (
+	"testing"
+)
 
 type MyTask1 struct {
 	PriorityInt
-	itask ITask
+	IExecute
 }
 
 // Execute
@@ -28,7 +30,7 @@ func TestTargetCase1(t *testing.T) {
 	target.AddTask(&MyTask1{PriorityInt: 3})
 
 	if task, ok := target.tasks.Top(); ok {
-		if task.(ITask).GetPriority() != 4 {
+		if task.(IPriority).GetPriority() != 4 {
 			t.Error("task GetPriority error")
 		}
 	} else {
