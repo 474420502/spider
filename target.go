@@ -57,6 +57,8 @@ type Target struct {
 	preparedTasks *pqueue.PriorityQueue
 	subTasks      *pqueue.PriorityQueue
 
+	beforeEveryTask func(*Context)
+
 	priorityCompare compare.Compare
 	Is              *SettingTarget
 }
@@ -131,14 +133,14 @@ func (target *Target) AddTask(task ITask) {
 	target.tasks.Push(task)
 }
 
-// AppendTask 添加任务
-func (target *Target) AppendTask(task ITask) {
-	target.tasks.Push(task)
+// BeforeEveryTask 添加任务
+func (target *Target) BeforeEveryTask(before func(*Context)) {
+	target.beforeEveryTask = before
 }
 
-// AppendTask 添加任务
-func (target *Target) Before(task ITask) {
-	target.tasks.Push(task)
+// BeforeEveryTask 添加任务
+func (target *Target) checkRunning() bool {
+	return atomic.LoadInt32(&target.Is.isRunning) > 0
 }
 
 func (target *Target) processingContext(ctx *Context) {
@@ -153,16 +155,27 @@ func (target *Target) StartTask() {
 	ctx := &Context{target: target, share: target.share}
 	ctx.SetRetry(0)
 
+LOOP:
 	for atomic.LoadInt32(&target.Is.isRunning) > 0 {
 
 		if itask, ok := target.tasks.Pop(); ok {
 
-			if before, ok := itask.(IBefore); ok {
-				before.Before(ctx)
+			if urls, ok := itask.(IUrls); ok {
+				ctx.urls = urls.GetUrls()
+			}
+
+			if target.beforeEveryTask != nil {
+				target.beforeEveryTask(ctx)
+				if !target.checkRunning() {
+					break LOOP
+				}
 			}
 
 			if task, ok := itask.(ITask); ok {
 				task.Execute(ctx)
+				if !target.checkRunning() {
+					break LOOP
+				}
 			} else {
 				log.Fatalln("task must have the method of Execute")
 			}
@@ -178,6 +191,11 @@ func (target *Target) StartTask() {
 						sub.Execute(ctx)
 					}
 				}
+
+				if !target.checkRunning() {
+					break LOOP //退出 for 达到退出程序目的
+				}
+
 			}
 
 		} else if target.Is.isTaskOnce {

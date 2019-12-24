@@ -2,7 +2,10 @@ package spider
 
 import "github.com/474420502/requests"
 
-import pqueue "github.com/474420502/focus/priority_queue"
+// IUrls The Interface Of Spider Execute
+type IUrls interface {
+	GetUrls() []string
+}
 
 // IExecute The Interface Of Spider Execute
 type IExecute interface {
@@ -29,7 +32,7 @@ type SettingContext struct {
 type Context struct {
 	target *Target
 
-	urls     *pqueue.PriorityQueue
+	urls     []string
 	session  *requests.Session
 	workflow *requests.Workflow
 	content  string
@@ -38,6 +41,16 @@ type Context struct {
 	retry int
 
 	Is *SettingContext
+}
+
+// GetUrls Get return urls []string
+func (ctx *Context) GetUrls() []string {
+	return ctx.urls
+}
+
+// SetUrls Set urls []string
+func (ctx *Context) SetUrls(urls []string) {
+	ctx.urls = urls
 }
 
 // GetWorkflow Get return workflow *requests.Workflow
