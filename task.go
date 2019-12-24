@@ -1,13 +1,21 @@
 package spider
 
+import "github.com/474420502/requests"
+
+import pqueue "github.com/474420502/focus/priority_queue"
+
 // IExecute The Interface Of Spider Execute
 type IExecute interface {
 	Execute(*Context)
 }
 
+// IBefore 预处理
+type IBefore interface {
+	Before(*Context)
+}
+
 // ITask The Interface Of Task
 type ITask interface {
-	IPriority
 	IExecute
 }
 
@@ -21,10 +29,35 @@ type SettingContext struct {
 type Context struct {
 	target *Target
 
+	urls     *pqueue.PriorityQueue
+	session  *requests.Session
+	workflow *requests.Workflow
+	content  string
+
 	share map[string]interface{}
 	retry int
 
 	Is *SettingContext
+}
+
+// GetWorkflow Get return workflow *requests.Workflow
+func (ctx *Context) GetWorkflow() *requests.Workflow {
+	return ctx.workflow
+}
+
+// SetWorkflow Set workflow *requests.Workflow
+func (ctx *Context) SetWorkflow(workflow *requests.Workflow) {
+	ctx.workflow = workflow
+}
+
+// GetSession Get return session *requests.Session
+func (ctx *Context) GetSession() *requests.Session {
+	return ctx.session
+}
+
+// SetSession Set session *requests.Session
+func (ctx *Context) SetSession(session *requests.Session) {
+	ctx.session = session
 }
 
 // GetRetry Get return retry int

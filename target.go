@@ -1,6 +1,7 @@
 package spider
 
 import (
+	"log"
 	"sync/atomic"
 
 	"github.com/474420502/focus/compare"
@@ -16,6 +17,11 @@ type SettingTarget struct {
 
 // NewTarget 目标
 func NewTarget() *Target {
+	return NewTargetMaxPriority()
+}
+
+// NewTargetMaxPriority 目标
+func NewTargetMaxPriority() *Target {
 	target := new(Target)
 
 	target.tasks = pqueue.New(PriorityMax)
@@ -28,9 +34,22 @@ func NewTarget() *Target {
 	return target
 }
 
+// NewTargetMinPriority 目标
+func NewTargetMinPriority() *Target {
+	target := new(Target)
+
+	target.tasks = pqueue.New(PriorityMin)
+	target.preparedTasks = pqueue.New(PriorityMin)
+	target.subTasks = pqueue.New(subPriorityMin)
+
+	target.share = make(map[string]interface{})
+	target.Is = &SettingTarget{isRunning: 0, isTaskOnce: false}
+
+	return target
+}
+
 // Target 目标
 type Target struct {
-	url     string
 	session *requests.Session
 	share   map[string]interface{}
 
@@ -97,15 +116,15 @@ func (target *Target) SetSession(session *requests.Session) {
 	target.session = session
 }
 
-// GetURL Get return url string
-func (target *Target) GetURL() string {
-	return target.url
-}
+// // GetURL Get return url string
+// func (target *Target) GetURL() string {
+// 	return target.url
+// }
 
-// SetURL Set url string
-func (target *Target) SetURL(url string) {
-	target.url = url
-}
+// // SetURL Set url string
+// func (target *Target) SetURL(url string) {
+// 	target.url = url
+// }
 
 // AddTask 添加任务
 func (target *Target) AddTask(task ITask) {
@@ -114,6 +133,11 @@ func (target *Target) AddTask(task ITask) {
 
 // AppendTask 添加任务
 func (target *Target) AppendTask(task ITask) {
+	target.tasks.Push(task)
+}
+
+// AppendTask 添加任务
+func (target *Target) Before(task ITask) {
 	target.tasks.Push(task)
 }
 
@@ -133,8 +157,15 @@ func (target *Target) StartTask() {
 
 		if itask, ok := target.tasks.Pop(); ok {
 
-			task := itask.(ITask)
-			task.Execute(ctx)
+			if before, ok := itask.(IBefore); ok {
+				before.Before(ctx)
+			}
+
+			if task, ok := itask.(ITask); ok {
+				task.Execute(ctx)
+			} else {
+				log.Fatalln("task must have the method of Execute")
+			}
 
 			target.preparedTasks.Push(itask)
 			for target.subTasks.Size() != 0 {
@@ -147,7 +178,6 @@ func (target *Target) StartTask() {
 						sub.Execute(ctx)
 					}
 				}
-
 			}
 
 		} else if target.Is.isTaskOnce {

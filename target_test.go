@@ -8,27 +8,27 @@ import (
 )
 
 type MyTask1 struct {
-	PriorityInt
 	IExecute
+	IBefore
+}
+
+func (mt *MyTask1) Before(ctx *Context) {
+	target := ctx.GetTarget()
+	ses := target.GetSession()
+	wf := ses.Get("http://www.baidu.com")
+	ctx.workflow = wf
 }
 
 // Execute
 func (mt *MyTask1) Execute(ctx *Context) {
 
-	target := ctx.GetTarget()
-	ses := target.GetSession()
-
-	wf := ses.Get(target.url)
-	resp, err := wf.Execute()
+	resp, err := ctx.workflow.Execute()
 
 	if err != nil {
 		panic(err)
 	}
 
 	resp.Content()
-
-	mt.PriorityInt = 5
-
 }
 
 type X struct {
@@ -86,19 +86,9 @@ func TestTargetCase1(t *testing.T) {
 	target := NewTarget()
 
 	target.SetTaskOnce(true)
-	target.SetURL("http://www.baidu.com")
-
-	target.AddTask(&MyTask1{PriorityInt: 1})
-	target.AddTask(&MyTask1{PriorityInt: 4})
-	target.AddTask(&MyTask1{PriorityInt: 3})
-
-	if task, ok := target.tasks.Top(); ok {
-		if task.(IPriority).GetPriority() != 4 {
-			t.Error("task GetPriority error")
-		}
-	} else {
-		t.Error("addtask error")
-	}
+	target.AddTask(&MyTask1{})
+	target.AddTask(&MyTask1{})
+	target.AddTask(&MyTask1{})
 
 	target.StartTask()
 }

@@ -39,8 +39,17 @@ func (pri PriorityFloat32) GetPriority() int {
 
 // PriorityMax 最大值优先
 func PriorityMax(k1, k2 interface{}) int {
-	t1, t2 := k1.(IPriority), k2.(IPriority)
-	if t1.GetPriority() > t2.GetPriority() {
+	p1, p2 := 0, 0
+
+	if priority, ok := k1.(IPriority); ok {
+		p1 = priority.GetPriority()
+	}
+
+	if priority, ok := k2.(IPriority); ok {
+		p2 = priority.GetPriority()
+	}
+
+	if p1 > p2 {
 		return 1
 	}
 	return -1
@@ -48,11 +57,22 @@ func PriorityMax(k1, k2 interface{}) int {
 
 // PriorityMin 最小值优先
 func PriorityMin(k1, k2 interface{}) int {
-	t1, t2 := k1.(IPriority), k2.(IPriority)
-	if t1.GetPriority() < t2.GetPriority() {
+
+	p1, p2 := 0, 0
+
+	if priority, ok := k1.(IPriority); ok {
+		p1 = priority.GetPriority()
+	}
+
+	if priority, ok := k2.(IPriority); ok {
+		p2 = priority.GetPriority()
+	}
+
+	if p1 < p2 {
 		return 1
 	}
 	return -1
+
 }
 
 // subPriorityMax 最大值优先
@@ -75,6 +95,31 @@ func subPriorityMax(k1, k2 interface{}) int {
 	}
 
 	if p1 > p2 {
+		return 1
+	}
+	return -1
+}
+
+// subPriorityMin 最小值优先
+func subPriorityMin(k1, k2 interface{}) int {
+
+	p1, p2 := 0, 0
+
+	switch priority := k1.(type) {
+	case IPriority:
+		p1 = priority.GetPriority()
+	case func(*Context):
+		p1 = 0
+	}
+
+	switch priority := k2.(type) {
+	case IPriority:
+		p2 = priority.GetPriority()
+	case func(*Context):
+		p2 = 0
+	}
+
+	if p1 < p2 {
 		return 1
 	}
 	return -1
