@@ -133,8 +133,13 @@ func (target *Target) AddTask(task ITask) {
 	target.tasks.Push(task)
 }
 
-// BeforeEveryTask 添加任务
-func (target *Target) BeforeEveryTask(before func(*Context)) {
+// Initialize 添加任务
+func (target *Target) Initialize(before func(*Context)) {
+	target.beforeEveryTask = before
+}
+
+// BeforeEveryTasks 添加任务
+func (target *Target) BeforeEveryTasks(before func(*Context)) {
 	target.beforeEveryTask = before
 }
 
@@ -152,7 +157,10 @@ func (target *Target) StartTask() {
 
 	atomic.StoreInt32(&target.Is.isRunning, 1)
 
-	ctx := &Context{target: target, share: target.share}
+	ctx := &Context{
+		target: target,
+		share:  target.share,
+	}
 	ctx.SetRetry(0)
 
 LOOP:
@@ -160,12 +168,15 @@ LOOP:
 
 		if itask, ok := target.tasks.Pop(); ok {
 
-			if urls, ok := itask.(IUrls); ok {
-				ctx.urls = urls.GetUrls()
-			}
-
 			if target.beforeEveryTask != nil {
 				target.beforeEveryTask(ctx)
+				if !target.checkRunning() {
+					break LOOP
+				}
+			}
+
+			if purl, ok := itask.(IPreprocessingUrl); ok {
+				purl.PreprocessingUrl(ctx)
 				if !target.checkRunning() {
 					break LOOP
 				}

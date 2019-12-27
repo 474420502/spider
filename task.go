@@ -2,7 +2,12 @@ package spider
 
 import "github.com/474420502/requests"
 
-// IUrls The Interface Of Spider Execute
+// IPreprocessingUrl Get Url To Execute
+type IPreprocessingUrl interface {
+	PreprocessingUrl(ctx *Context)
+}
+
+// IUrls Get Urls To Execute
 type IUrls interface {
 	GetUrls() []string
 }
@@ -43,14 +48,18 @@ type Context struct {
 	Is *SettingContext
 }
 
-// GetUrls Get return urls []string
-func (ctx *Context) GetUrls() []string {
-	return ctx.urls
+// Execute will do list:
+// 1: Get return ctx.workflow.Execute() == ctx.Execute()
+// 2: ctx.context = response.Content()
+func (ctx *Context) Execute() (*requests.Response, error) {
+	resp, err := ctx.workflow.Execute()
+	ctx.content = resp.Content()
+	return resp, err
 }
 
-// SetUrls Set urls []string
-func (ctx *Context) SetUrls(urls []string) {
-	ctx.urls = urls
+// Content return cxt
+func (ctx *Context) Content() string {
+	return ctx.content
 }
 
 // GetWorkflow Get return workflow *requests.Workflow
@@ -63,14 +72,14 @@ func (ctx *Context) SetWorkflow(workflow *requests.Workflow) {
 	ctx.workflow = workflow
 }
 
-// GetSession Get return session *requests.Session
+// GetSession Get return target.session *requests.Session
 func (ctx *Context) GetSession() *requests.Session {
-	return ctx.session
+	return ctx.target.GetSession()
 }
 
-// SetSession Set session *requests.Session
+// SetSession Set target.session *requests.Session
 func (ctx *Context) SetSession(session *requests.Session) {
-	ctx.session = session
+	ctx.target.SetSession(session)
 }
 
 // GetRetry Get return retry int

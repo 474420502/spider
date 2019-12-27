@@ -8,27 +8,21 @@ import (
 )
 
 type MyTask1 struct {
+	PreGetUrl
 	IExecute
-	IBefore
-}
-
-func (mt *MyTask1) Before(ctx *Context) {
-	target := ctx.GetTarget()
-	ses := target.GetSession()
-	wf := ses.Get("http://www.baidu.com")
-	ctx.workflow = wf
 }
 
 // Execute
 func (mt *MyTask1) Execute(ctx *Context) {
 
-	resp, err := ctx.workflow.Execute()
+	resp, err := ctx.Execute()
 
 	if err != nil {
 		panic(err)
 	}
 
-	resp.Content()
+	content := resp.Content()
+	panic(content)
 }
 
 type X struct {
@@ -86,7 +80,8 @@ func TestTargetCase1(t *testing.T) {
 	target := NewTarget()
 
 	target.SetTaskOnce(true)
-	target.AddTask(&MyTask1{})
+
+	target.AddTask(&MyTask1{PreGetUrl: "http://www.baidu.com"})
 	target.AddTask(&MyTask1{})
 	target.AddTask(&MyTask1{})
 
