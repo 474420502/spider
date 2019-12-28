@@ -1,6 +1,7 @@
 package spider
 
 import (
+	"log"
 	"testing"
 
 	pqueue "github.com/474420502/focus/priority_queue"
@@ -22,7 +23,19 @@ func (mt *MyTask1) Execute(ctx *Context) {
 	}
 
 	content := resp.Content()
-	panic(content)
+	if len(content) >= 10 {
+		log.Panic("get ", ctx.GetWorkflow().GetParsedURL(), " error content:\n", content)
+	}
+}
+
+func TestTargetCase1(t *testing.T) {
+
+	target := NewTarget()
+
+	target.SetTaskOnce(true)
+	target.AddTask(&MyTask1{PreGetUrl: "http://www.baidu.com"})
+
+	target.StartTask()
 }
 
 type X struct {
@@ -73,17 +86,4 @@ func TestP(t *testing.T) {
 			break
 		}
 	}
-}
-
-func TestTargetCase1(t *testing.T) {
-
-	target := NewTarget()
-
-	target.SetTaskOnce(true)
-
-	target.AddTask(&MyTask1{PreGetUrl: "http://www.baidu.com"})
-	target.AddTask(&MyTask1{})
-	target.AddTask(&MyTask1{})
-
-	target.StartTask()
 }

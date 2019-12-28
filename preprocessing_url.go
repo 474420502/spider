@@ -25,26 +25,26 @@ func (h PrePutUrl) PreprocessingUrl(ctx *Context) {
 type PHeadUrl string
 
 func (h PHeadUrl) PreprocessingUrl(ctx *Context) {
-	ctx.SetWorkflow(ctx.GetSession().Get((string)(h)))
+	ctx.SetWorkflow(ctx.GetSession().Head((string)(h)))
 }
 
 // PPatchUrl Task的 Patch url 预处理组件
 type PPatchUrl string
 
 func (h PPatchUrl) PreprocessingUrl(ctx *Context) {
-	ctx.SetWorkflow(ctx.GetSession().Get((string)(h)))
+	ctx.SetWorkflow(ctx.GetSession().Patch((string)(h)))
 }
 
 // PDeleteUrl Task的 Delete url 预处理组件
 type PDeleteUrl string
 
 func (h PDeleteUrl) PreprocessingUrl(ctx *Context) {
-	ctx.SetWorkflow(ctx.GetSession().Get((string)(h)))
+	ctx.SetWorkflow(ctx.GetSession().Delete((string)(h)))
 }
 
 // POptionsUrl Task的 Options url 预处理组件
 type POptionsUrl string
 
 func (h POptionsUrl) PreprocessingUrl(ctx *Context) {
-	ctx.SetWorkflow(ctx.GetSession().Get((string)(h)))
+	ctx.SetWorkflow(ctx.GetSession().Options((string)(h)))
 }
