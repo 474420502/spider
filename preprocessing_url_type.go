@@ -1,5 +1,10 @@
 package spider
 
+// IPreprocessingUrl Get Url To Execute
+type IPreprocessingUrl interface {
+	PreprocessingUrl(ctx *Context)
+}
+
 // PreGetUrl Task的 Get url 预处理组件
 type PreGetUrl string
 

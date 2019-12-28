@@ -3,6 +3,7 @@ package spider
 import (
 	"log"
 	"sync/atomic"
+	"time"
 
 	"github.com/474420502/focus/compare"
 	pqueue "github.com/474420502/focus/priority_queue"
@@ -25,6 +26,7 @@ func NewTargetMaxPriority() *Target {
 	target := new(Target)
 
 	target.tasks = pqueue.New(PriorityMax)
+	target.timeTasks = pqueue.New(compare.Time)
 	target.preparedTasks = pqueue.New(PriorityMax)
 	target.subTasks = pqueue.New(subPriorityMax)
 
@@ -54,6 +56,7 @@ type Target struct {
 	share   map[string]interface{}
 
 	tasks         *pqueue.PriorityQueue
+	timeTasks     *pqueue.PriorityQueue
 	preparedTasks *pqueue.PriorityQueue
 	subTasks      *pqueue.PriorityQueue
 
@@ -133,6 +136,11 @@ func (target *Target) AddTask(task ITask) {
 	target.tasks.Push(task)
 }
 
+// AddSubTask 添加子任务
+func (target *Target) AddSubTask(task ITask) {
+	target.subTasks.Push(task)
+}
+
 // Initialize 添加任务
 func (target *Target) Initialize(before func(*Context)) {
 	target.beforeEveryTask = before
@@ -148,8 +156,40 @@ func (target *Target) checkRunning() bool {
 	return atomic.LoadInt32(&target.Is.isRunning) > 0
 }
 
-func (target *Target) processingContext(ctx *Context) {
+func (target *Target) processingContext(ctx *Context, itask interface{}, EveryTask func(*Context)) bool {
+	switch itask := itask.(type) {
+	case func(*Context):
+		itask(ctx)
+	case IExecute:
 
+		if EveryTask != nil {
+			EveryTask(ctx)
+			if !target.checkRunning() {
+				return false
+			}
+		}
+
+		if purl, ok := itask.(IPreprocessingUrl); ok {
+			purl.PreprocessingUrl(ctx)
+			if !target.checkRunning() {
+				return false
+			}
+		}
+
+		if task, ok := itask.(ITask); ok {
+			task.Execute(ctx)
+			if !target.checkRunning() {
+				return false
+			}
+		} else {
+			log.Fatalln("task must have the method of Execute")
+		}
+	}
+	return true
+}
+
+type IQueue interface {
+	Pop() (interface{}, bool)
 }
 
 // StartTask 添加任务
@@ -165,42 +205,34 @@ func (target *Target) StartTask() {
 
 LOOP:
 	for atomic.LoadInt32(&target.Is.isRunning) > 0 {
+		var itask ITask
 
-		if itask, ok := target.tasks.Pop(); ok {
-
-			if target.beforeEveryTask != nil {
-				target.beforeEveryTask(ctx)
-				if !target.checkRunning() {
-					break LOOP
+		if ptask, ok := target.timeTasks.Top(); ok {
+			if plan, ok := ptask.(ITimePlan); ok {
+				if plan.GetExecuteTime().Before(time.Now()) {
+					ptask, _ = target.timeTasks.Pop()
+					// TODO: 时间的关系处理时间的下次执行. 如果仅仅一次不再进入时间任务队列
 				}
 			}
+			itask = ptask.(ITask)
+		} else if ptask, ok := target.tasks.Pop(); ok {
+			itask = ptask.(ITask)
+		}
 
-			if purl, ok := itask.(IPreprocessingUrl); ok {
-				purl.PreprocessingUrl(ctx)
-				if !target.checkRunning() {
-					break LOOP
-				}
-			}
-
-			if task, ok := itask.(ITask); ok {
-				task.Execute(ctx)
-				if !target.checkRunning() {
-					break LOOP
-				}
-			} else {
-				log.Fatalln("task must have the method of Execute")
-			}
+		if itask != nil {
 
 			target.preparedTasks.Push(itask)
-			for target.subTasks.Size() != 0 {
+			if target.processingContext(ctx, itask, target.beforeEveryTask) == false {
+				break LOOP
+			}
 
-				if isub, ok := target.subTasks.Pop(); ok {
-					switch sub := isub.(type) {
-					case func(*Context):
-						sub(ctx)
-					case IExecute:
-						sub.Execute(ctx)
-					}
+			for isub, ok := target.subTasks.Pop(); ok; isub, ok = target.subTasks.Pop() {
+
+				switch sub := isub.(type) {
+				case func(*Context):
+					sub(ctx)
+				case IExecute:
+					sub.Execute(ctx)
 				}
 
 				if !target.checkRunning() {
@@ -209,7 +241,7 @@ LOOP:
 
 			}
 
-		} else if target.Is.isTaskOnce {
+		} else if target.Is.isTaskOnce && target.timeTasks.Size() == 0 {
 			break
 		} else {
 			target.tasks, target.preparedTasks = target.preparedTasks, target.tasks
