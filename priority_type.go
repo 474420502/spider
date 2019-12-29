@@ -124,3 +124,12 @@ func subPriorityMin(k1, k2 interface{}) int {
 	}
 	return -1
 }
+
+// timePriority 最小值优先
+func timePriority(k1, k2 interface{}) int {
+	t1, t2 := k1.(IPlanTime).GetExecuteTime(), k2.(IPlanTime).GetExecuteTime()
+	if t1.Before(*t2) {
+		return 1
+	}
+	return -1
+}

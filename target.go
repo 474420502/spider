@@ -26,7 +26,7 @@ func NewTargetMaxPriority() *Target {
 	target := new(Target)
 
 	target.tasks = pqueue.New(PriorityMax)
-	target.timeTasks = pqueue.New(compare.Time)
+	target.timeTasks = pqueue.New(timePriority)
 	target.preparedTasks = pqueue.New(PriorityMax)
 	target.subTasks = pqueue.New(subPriorityMax)
 
@@ -41,6 +41,7 @@ func NewTargetMinPriority() *Target {
 	target := new(Target)
 
 	target.tasks = pqueue.New(PriorityMin)
+	target.timeTasks = pqueue.New(timePriority)
 	target.preparedTasks = pqueue.New(PriorityMin)
 	target.subTasks = pqueue.New(subPriorityMin)
 
@@ -133,12 +134,24 @@ func (target *Target) SetSession(session *requests.Session) {
 
 // AddTask 添加任务
 func (target *Target) AddTask(task ITask) {
-	target.tasks.Push(task)
+	if itask, ok := task.(IPlanTime); ok {
+		if itask.Next() {
+			target.timeTasks.Push(task)
+		}
+	} else {
+		target.tasks.Push(task)
+	}
 }
 
 // AddSubTask 添加子任务
 func (target *Target) AddSubTask(task ITask) {
-	target.subTasks.Push(task)
+	if itask, ok := task.(IPlanTime); ok {
+		if itask.Next() {
+			target.timeTasks.Push(task)
+		}
+	} else {
+		target.subTasks.Push(task)
+	}
 }
 
 // Initialize 添加任务
@@ -154,6 +167,33 @@ func (target *Target) BeforeEveryTasks(before func(*Context)) {
 // BeforeEveryTask 添加任务
 func (target *Target) checkRunning() bool {
 	return atomic.LoadInt32(&target.Is.isRunning) > 0
+}
+
+func (target *Target) processingPlanContext(ctx *Context, ptask interface{}, EveryTask func(*Context)) bool {
+	if EveryTask != nil {
+		EveryTask(ctx)
+		if !target.checkRunning() {
+			return false
+		}
+	}
+
+	if purl, ok := ptask.(IPreprocessingUrl); ok {
+		purl.PreprocessingUrl(ctx)
+		if !target.checkRunning() {
+			return false
+		}
+	}
+
+	if task, ok := ptask.(ITask); ok {
+		task.Execute(ctx)
+		if !target.checkRunning() {
+			return false
+		}
+	} else {
+		log.Fatalln("task must have the method of Execute")
+	}
+
+	return true
 }
 
 func (target *Target) processingContext(ctx *Context, itask interface{}, EveryTask func(*Context)) bool {
@@ -188,10 +228,6 @@ func (target *Target) processingContext(ctx *Context, itask interface{}, EveryTa
 	return true
 }
 
-type IQueue interface {
-	Pop() (interface{}, bool)
-}
-
 // StartTask 添加任务
 func (target *Target) StartTask() {
 
@@ -208,10 +244,18 @@ LOOP:
 		var itask ITask
 
 		if ptask, ok := target.timeTasks.Top(); ok {
-			if plan, ok := ptask.(ITimePlan); ok {
+			if plan, ok := ptask.(IPlanTime); ok {
 				if plan.GetExecuteTime().Before(time.Now()) {
 					ptask, _ = target.timeTasks.Pop()
+					if target.processingPlanContext(ctx, ptask, target.beforeEveryTask) == false {
+						break LOOP
+					}
+
 					// TODO: 时间的关系处理时间的下次执行. 如果仅仅一次不再进入时间任务队列
+					if plan.Next() {
+						target.timeTasks.Push(ptask)
+					}
+
 				}
 			}
 			itask = ptask.(ITask)
