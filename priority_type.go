@@ -1,10 +1,5 @@
 package spider
 
-// IPriority 优先接口
-type IPriority interface {
-	GetPriority() int
-}
-
 // PriorityInt Int优先级
 type PriorityInt int
 

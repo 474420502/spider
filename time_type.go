@@ -2,12 +2,6 @@ package spider
 
 import "time"
 
-// IPlanTime about time to plan
-type IPlanTime interface {
-	Next() bool
-	GetExecuteTime() *time.Time
-}
-
 // PlanOnTime 准时
 type PlanOnTime struct {
 	planTime time.Time

@@ -154,11 +154,6 @@ func (target *Target) AddSubTask(task ITask) {
 	}
 }
 
-// Initialize 添加任务
-func (target *Target) Initialize(before func(*Context)) {
-	target.beforeEveryTask = before
-}
-
 // BeforeEveryTasks 添加任务
 func (target *Target) BeforeEveryTasks(before func(*Context)) {
 	target.beforeEveryTask = before
@@ -170,6 +165,9 @@ func (target *Target) checkRunning() bool {
 }
 
 func (target *Target) processingPlanContext(ctx *Context, ptask interface{}, EveryTask func(*Context)) bool {
+
+	ctx.taskType = TypeTaskPlan
+
 	if EveryTask != nil {
 		EveryTask(ctx)
 		if !target.checkRunning() {
@@ -177,8 +175,8 @@ func (target *Target) processingPlanContext(ctx *Context, ptask interface{}, Eve
 		}
 	}
 
-	if purl, ok := ptask.(IPreprocessingUrl); ok {
-		purl.PreprocessingUrl(ctx)
+	if task, ok := ptask.(ITaskBefore); ok {
+		task.Before(ctx)
 		if !target.checkRunning() {
 			return false
 		}
@@ -193,14 +191,24 @@ func (target *Target) processingPlanContext(ctx *Context, ptask interface{}, Eve
 		log.Fatalln("task must have the method of Execute")
 	}
 
+	if task, ok := ptask.(ITaskAfter); ok {
+		task.After(ctx)
+		if !target.checkRunning() {
+			return false
+		}
+	}
+
 	return true
 }
 
 func (target *Target) processingContext(ctx *Context, itask interface{}, EveryTask func(*Context)) bool {
+
+	ctx.taskType = TypeTaskMain
+
 	switch itask := itask.(type) {
 	case func(*Context):
 		itask(ctx)
-	case IExecute:
+	case ITask:
 
 		if EveryTask != nil {
 			EveryTask(ctx)
@@ -209,8 +217,8 @@ func (target *Target) processingContext(ctx *Context, itask interface{}, EveryTa
 			}
 		}
 
-		if purl, ok := itask.(IPreprocessingUrl); ok {
-			purl.PreprocessingUrl(ctx)
+		if task, ok := itask.(ITaskBefore); ok {
+			task.Before(ctx)
 			if !target.checkRunning() {
 				return false
 			}
@@ -224,7 +232,62 @@ func (target *Target) processingContext(ctx *Context, itask interface{}, EveryTa
 		} else {
 			log.Fatalln("task must have the method of Execute")
 		}
+
+		if task, ok := itask.(ITaskAfter); ok {
+			task.After(ctx)
+			if !target.checkRunning() {
+				return false
+			}
+		}
 	}
+	return true
+}
+
+func (target *Target) processingSubContext(ctx *Context, isub interface{}, EveryTask func(*Context)) bool {
+
+	ctx.taskType = TypeTaskSub
+
+	switch sub := isub.(type) {
+	case func(*Context):
+
+		if EveryTask != nil {
+			EveryTask(ctx)
+			if !target.checkRunning() {
+				return false
+			}
+		}
+		sub(ctx)
+
+	case ITask:
+
+		if EveryTask != nil {
+			EveryTask(ctx)
+			if !target.checkRunning() {
+				return false
+			}
+		}
+
+		if task, ok := sub.(ITaskBefore); ok {
+			task.Before(ctx)
+			if !target.checkRunning() {
+				return false
+			}
+		}
+
+		sub.Execute(ctx)
+		if !target.checkRunning() {
+			return false
+		}
+
+		if task, ok := sub.(ITaskAfter); ok {
+			task.After(ctx)
+			if !target.checkRunning() {
+				return false
+			}
+		}
+
+	}
+
 	return true
 }
 
@@ -243,9 +306,13 @@ LOOP:
 	for atomic.LoadInt32(&target.Is.isRunning) > 0 {
 		var itask ITask
 
+		ctx.taskType = TypeTaskUnknown
+
 		if ptask, ok := target.timeTasks.Top(); ok {
 			if plan, ok := ptask.(IPlanTime); ok {
+
 				if plan.GetExecuteTime().Before(time.Now()) {
+
 					ptask, _ = target.timeTasks.Pop()
 					if target.processingPlanContext(ctx, ptask, target.beforeEveryTask) == false {
 						break LOOP
@@ -255,38 +322,27 @@ LOOP:
 					if plan.Next() {
 						target.timeTasks.Push(ptask)
 					}
-
 				}
 			}
-			itask = ptask.(ITask)
+		} else if isub, ok := target.subTasks.Pop(); ok {
+
+			if target.processingSubContext(ctx, isub, target.beforeEveryTask) {
+				break LOOP //退出 for 达到退出程序目的
+			}
+
 		} else if ptask, ok := target.tasks.Pop(); ok {
-			itask = ptask.(ITask)
-		}
 
-		if itask != nil {
-
-			target.preparedTasks.Push(itask)
-			if target.processingContext(ctx, itask, target.beforeEveryTask) == false {
-				break LOOP
-			}
-
-			for isub, ok := target.subTasks.Pop(); ok; isub, ok = target.subTasks.Pop() {
-
-				switch sub := isub.(type) {
-				case func(*Context):
-					sub(ctx)
-				case IExecute:
-					sub.Execute(ctx)
+			if itask, ok = ptask.(ITask); ok {
+				target.preparedTasks.Push(itask)
+				if target.processingContext(ctx, itask, target.beforeEveryTask) == false {
+					break LOOP
 				}
-
-				if !target.checkRunning() {
-					break LOOP //退出 for 达到退出程序目的
-				}
-
+			} else {
+				panic("task must inherit ITask interface")
 			}
 
 		} else if target.Is.isTaskOnce && target.timeTasks.Size() == 0 {
-			break
+			break LOOP
 		} else {
 			target.tasks, target.preparedTasks = target.preparedTasks, target.tasks
 		}
@@ -296,8 +352,8 @@ LOOP:
 	for itask, ok := target.tasks.Pop(); ok; itask, ok = target.tasks.Pop() {
 		target.preparedTasks.Push(itask)
 	}
-	target.tasks, target.preparedTasks = target.preparedTasks, target.tasks
 
+	target.tasks, target.preparedTasks = target.preparedTasks, target.tasks
 	atomic.StoreInt32(&target.Is.isRunning, 0)
 }
 

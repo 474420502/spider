@@ -10,7 +10,7 @@ import (
 
 type MyTask1 struct {
 	PreGetUrl
-	IExecute
+	ITask
 }
 
 // Execute
@@ -23,7 +23,7 @@ func (mt *MyTask1) Execute(ctx *Context) {
 	}
 
 	content := resp.Content()
-	if len(content) >= 10 {
+	if len(content) <= 50 {
 		log.Panic("get ", ctx.GetWorkflow().GetParsedURL(), " error content:\n", content)
 	}
 }
@@ -34,7 +34,6 @@ func TestTargetCase1(t *testing.T) {
 
 	target.SetTaskOnce(true)
 	target.AddTask(&MyTask1{PreGetUrl: "http://www.baidu.com"})
-
 	target.StartTask()
 }
 

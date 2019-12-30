@@ -2,30 +2,25 @@ package spider
 
 import "github.com/474420502/requests"
 
-// IPreprocessingUrl Get Url To Execute
-type IPreprocessingUrl interface {
-	PreprocessingUrl(ctx *Context)
-}
-
-// IUrls Get Urls To Execute
-type IUrls interface {
-	GetUrls() []string
-}
-
-// IExecute The Interface Of Spider Execute
-type IExecute interface {
+// ITask The Interface Of Task
+type ITask interface {
 	Execute(*Context)
 }
 
-// IBefore 预处理
-type IBefore interface {
-	Before(*Context)
-}
+// TaskQueueType 任务队列的类型
+type TaskQueueType int
 
-// ITask The Interface Of Task
-type ITask interface {
-	IExecute
-}
+const (
+	_ TaskQueueType = iota
+	// TypeTaskUnknown 未知类型
+	TypeTaskUnknown
+	// TypeTaskMain 主任务
+	TypeTaskMain
+	// TypeTaskPlan 时间任务
+	TypeTaskPlan
+	// TypeTaskSub 子任务
+	TypeTaskSub
+)
 
 // SettingContext 一些判断操作
 type SettingContext struct {
@@ -42,10 +37,16 @@ type Context struct {
 	workflow *requests.Workflow
 	content  string
 
-	share map[string]interface{}
-	retry int
+	share    map[string]interface{}
+	retry    int
+	taskType TaskQueueType
 
 	Is *SettingContext
+}
+
+// GetTaskType Get return taskType TaskQueueType
+func (ctx *Context) GetTaskType() TaskQueueType {
+	return ctx.taskType
 }
 
 // Execute will do list:
